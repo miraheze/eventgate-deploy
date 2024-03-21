@@ -1,0 +1,348 @@
+openapi: 3.0.0
+info:
+  version: 0.4.0
+  title: EventGate Test Spec
+  description: >
+    This spec is used for testing only. It specifies the same routes
+    as the main spec.yaml, but also includes many x-ample requests
+    and responses that can only be used witih test/utils/eventgate_test_factory.js.
+  termsOfService: https://wikimediafoundation.org/wiki/Terms_of_Use
+  license:
+    name: Apache2 License
+    url: http://www.apache.org/licenses/LICENSE-2.0
+
+paths:
+  # from routes/root.js
+  /robots.txt:
+    get:
+      tags:
+        - Root
+        - Robots
+      description: Gets robots.txt
+      responses:
+        200:
+          description: Success
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+      x-amples:
+        - title: robots.txt check
+          request: {}
+          response:
+            status: 200
+  /:
+    get:
+      tags:
+        - Root
+      description: The root service end-point
+      responses:
+        200:
+          description: Success
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+      x-amples:
+        - title: root with no query params
+          request: {}
+          response:
+            status: 404
+        - title: spec from root
+          request:
+            query:
+              spec: true
+          response:
+            status: 200
+        - title: doc from root
+          request:
+            query:
+              doc: true
+          response:
+            status: 200
+        - title: root with wrong query param
+          request:
+            query:
+              fooo: true
+          response:
+            status: 404
+
+  # from routes/events.js
+  /v1/events:
+    post:
+      summary: Produce events
+      responses:
+        201:
+          description: Success
+        207:
+          description: Partial Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+        400:
+          description: Failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+
+      x-amples:
+        - title: Produce a single valid event
+          request:
+            headers:
+              content-type: application/json
+            body:
+              $schema: test/0.0.1
+              meta:
+                stream: test.event
+                id: "5e1dd101-641c-11e8-ab6c-b083fecf1287"
+              test: test_value
+          response:
+            status: 201
+
+        - title: Produce a single invalid event
+          request:
+            headers:
+              content-type: application/json
+            body:
+              $schema: /test/0.0.1
+              meta:
+                stream: test.event
+                id: "5e1dd101-641c-11e8-ab6c-b083fecf1287"
+              test: 0.01
+          response:
+            status: 400
+            body:
+              invalid:
+                - context:
+                    errorsText: "'.test' should be string"
+
+        - title: Produce a single event that encounters an error that should not be produced as an event error
+          request:
+            headers:
+              content-type: application/json
+            body:
+              $schema: /test/0.0.1
+              meta:
+                stream: __throw_unproduceable_error__
+                id: "5e1dd101-641c-11e8-ab6c-b083fecf1287"
+              test: test_value
+          response:
+            status: 500
+            body:
+              error:
+                - context:
+                    message: "Event's topic was __throw_unproduceable_error__. This error should be handled, but not produced as an error event"
+
+        - title: Produce a single event that encounters an error that should be produced as an event error
+          request:
+            headers:
+              content-type: application/json
+            body:
+              $schema: /test/0.0.1
+              meta:
+                stream: __throw_produceable_error__
+                id: "5e1dd101-641c-11e8-ab6c-b083fecf1287"
+              test: test_value
+          response:
+            status: 500
+            body:
+              error:
+                - context:
+                    message: "Event's topic was __throw_produceable_error__. This error should be handled, and should be produced as an error event"
+
+        - title: Produce a single event that encounters an EventSchemaLoadError
+          request:
+            headers:
+              content-type: application/json
+            body:
+              $schema: bad/uri/right/here@@@
+              meta:
+                stream: test.event
+                id: "5e1dd101-641c-11e8-ab6c-b083fecf1287"
+              test: test_value
+          response:
+            status: 500
+            body:
+              error:
+                - context:
+                    message: "Failed loading schema at bad/uri/right/here@@@"
+
+
+        - title: Produce a batch valid events
+          request:
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: test_value0
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+          response:
+            status: 201
+
+        - title: Produce batch events, one valid, one invalid
+          request:
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: 12345
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+          response:
+            status: 207
+
+        - title: Produce batch events, one valid, one invalid, one error
+          request:
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: 12345
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+              - $schema: /test/0.0.1
+                meta:
+                  stream: __throw_unproduceable_error__
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+          response:
+            status: 207
+            body:
+              invalid:
+                - context:
+                    errorsText: "'.test' should be string"
+              error:
+                - context:
+                    message: "Event's topic was __throw_unproduceable_error__. This error should be handled, but not produced as an error event"
+
+        - title: Produce batch events, all invalid
+          request:
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: 12345
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+                test_default: 67890
+          response:
+            status: 400
+            body:
+              invalid:
+                - context:
+                    errorsText: "'.test' should be string"
+                - context:
+                    errorsText: "'.test_default' should be string"
+
+        - title: Produce batch events, all errored
+          request:
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: __throw_unproduceable_error__
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: test_value
+              - $schema: /test/0.0.1
+                meta:
+                  stream: __throw_unproduceable_error__
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+                test_default: test_value
+          response:
+            status: 500
+            body:
+              error:
+                - context:
+                    message: "Event's topic was __throw_unproduceable_error__. This error should be handled, but not produced as an error event"
+                - context:
+                    message: "Event's topic was __throw_unproduceable_error__. This error should be handled, but not produced as an error event"
+
+        - title: Produce batch events, all invalid, fire and forget
+          request:
+            query:
+              hasty: true
+            headers:
+              content-type: application/json
+            body:
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1280"
+                test: 12345
+              - $schema: /test/0.0.1
+                meta:
+                  stream: test.event
+                  id: "5e1dd101-641c-11e8-ab6c-b083fecf1281"
+                test: test_value1
+                test_default: 67890
+          response:
+            status: 202
+            body: ""
+
+        - title: Produce with an empty body
+          request:
+            headers:
+              content-type: application/json
+          response:
+            status: 400
+
+  # from routes/events.js
+  /v1/_test/events:
+    get:
+      description: Produce the configured test_events
+      responses:
+        201:
+          description: Success
+        207:
+          description: Partial Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+        400:
+          description: Failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/problem'
+
+      x-amples:
+        - title: Produce a single valid test event
+          request:
+            headers:
+              content-type: application/json
+          response:
+            status: 201
