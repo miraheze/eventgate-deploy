@@ -1,3 +1,3 @@
 [submodule "src"]
 	path = src
-	url = https://github.com/wikimedia/eventgate
+	url = https://gitlab.wikimedia.org/repos/data-engineering/eventgate.git
